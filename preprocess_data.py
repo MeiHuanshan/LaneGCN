@@ -13,6 +13,8 @@ import random
 import sys
 import time
 from importlib import import_module
+import multiprocessing as mp
+
 
 from tqdm import tqdm
 import numpy as np
@@ -49,13 +51,13 @@ def main():
     config['cross_dist'] = 6
     config['cross_angle'] = 0.5 * np.pi
 
-    os.makedirs(os.path.dirname(config['preprocess_train']),exist_ok=True)    
+    os.makedirs(os.path.dirname(config['preprocess_train']),exist_ok=True)
 
 
 
-    val(config)
-    test(config)
-    train(config)
+    # val(config)
+    # test(config)
+    # train(config)
 
 
 def train(config):
@@ -412,4 +414,5 @@ def worker_init_fn(pid):
 
 
 if __name__ == "__main__":
+    mp.set_start_method('spawn')
     main()

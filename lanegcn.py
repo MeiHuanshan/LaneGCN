@@ -95,19 +95,19 @@ class Net(nn.Module):
     """
     Lane Graph Network contains following components:
         1. ActorNet: a 1D CNN to process the trajectory input
-        2. MapNet: LaneGraphCNN to learn structured map representations 
+        2. MapNet: LaneGraphCNN to learn structured map representations
            from vectorized map data
-        3. Actor-Map Fusion Cycle: fuse the information between actor nodes 
+        3. Actor-Map Fusion Cycle: fuse the information between actor nodes
            and lane nodes:
-            a. A2M: introduces real-time traffic information to 
+            a. A2M: introduces real-time traffic information to
                 lane nodes, such as blockage or usage of the lanes
-            b. M2M:  updates lane node features by propagating the 
+            b. M2M:  updates lane node features by propagating the
                 traffic information over lane graphs
-            c. M2A: fuses updated map features with real-time traffic 
+            c. M2A: fuses updated map features with real-time traffic
                 information back to actors
             d. A2A: handles the interaction between actors and produces
                 the output actor features
-        4. PredNet: prediction header for motion forecasting using 
+        4. PredNet: prediction header for motion forecasting using
            feature from A2A
     """
     def __init__(self, config):
@@ -134,7 +134,7 @@ class Net(nn.Module):
         graph = graph_gather(to_long(gpu(data["graph"])))
         nodes, node_idcs, node_ctrs = self.map_net(graph)
 
-        # actor-map fusion cycle 
+        # actor-map fusion cycle
         nodes = self.a2m(nodes, graph, actors, actor_idcs, actor_ctrs)
         nodes = self.m2m(nodes, graph)
         actors = self.m2a(actors, actor_idcs, actor_ctrs, nodes, node_idcs, node_ctrs)
@@ -258,7 +258,7 @@ class ActorNet(nn.Module):
         for i in range(len(outputs) - 2, -1, -1):
             out = F.interpolate(out, scale_factor=2, mode="linear", align_corners=False)
             out += self.lateral[i](outputs[i])
-
+        # get last?
         out = self.output(out)[:, :, -1]
         return out
 
