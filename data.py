@@ -35,7 +35,7 @@ class ArgoDataset(Dataset):
             self.map_query = MapQuery(config['map_scale'])
 
     def __getitem__(self, idx):
-        print(idx)
+        print('iter: ', idx)
         if 'preprocess' in self.config and self.config['preprocess']:
             data = self.split[idx]
 
@@ -216,6 +216,8 @@ class ArgoDataset(Dataset):
         data['rot'] = rot
         data['gt_preds'] = gt_preds
         data['has_preds'] = has_preds
+        # for key, value in data.items():
+        #     print(key, np.array(value).shape)
         return data
 
 
@@ -270,7 +272,6 @@ class ArgoDataset(Dataset):
             node_idcs.append(range(count, count + len(ctr)))
             count += len(ctr)
         num_nodes = count
-
         pre, suc = dict(), dict()
         for key in ['u', 'v']:
             pre[key], suc[key] = [], []
@@ -360,6 +361,8 @@ class ArgoDataset(Dataset):
                 graph[key] += dilated_nbrs2(graph[key][0], graph['num_nodes'], self.config['scales'])
             else:
                 graph[key] += dilated_nbrs(graph[key][0], graph['num_nodes'], self.config['num_scales'])
+        # for key, value in graph.items():
+        #     print(key, np.array(value).shape)
         return graph
 
 

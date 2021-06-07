@@ -54,10 +54,14 @@ def main():
 
     os.makedirs(os.path.dirname(config['preprocess_train']),exist_ok=True)
 
+<<<<<<< HEAD
 
 
 <<<<<<< HEAD
     # val(config)
+=======
+    val(config)
+>>>>>>> multiprocess cuda
 =======
     val(config)
 >>>>>>> multiprocess cuda
@@ -135,6 +139,7 @@ def val(config):
 
     t = time.time()
     for i, data in enumerate(tqdm(val_loader)):
+<<<<<<< HEAD
         print(data.keys())
         exit()
     #     data = dict(data)
@@ -172,6 +177,47 @@ def val(config):
     #     drop_last=False)
 
     # modify(config, data_loader,config["preprocess_val"])
+=======
+        print('loop: ', i)
+        data = dict(data)
+        for j in range(len(data["idx"])):
+            store = dict()
+            for key in [
+                "idx",
+                "city",
+                "feats",
+                "ctrs",
+                "orig",
+                "theta",
+                "rot",
+                "gt_preds",
+                "has_preds",
+                "graph",
+            ]:
+                store[key] = to_numpy(data[key][j])
+                if key in ["graph"]:
+                    store[key] = to_int16(store[key])
+            stores[store["idx"]] = store
+
+        if i > 10:
+            break
+
+        if (i + 1) % 100 == 0:
+            print(i, time.time() - t)
+            t = time.time()
+
+    dataset = PreprocessDataset(stores, config, train=False)
+    data_loader = DataLoader(
+        dataset,
+        batch_size=config['batch_size'],
+        num_workers=config['workers'],
+        shuffle=False,
+        collate_fn=from_numpy,
+        pin_memory=True,
+        drop_last=False)
+
+    modify(config, data_loader,config["preprocess_val"])
+>>>>>>> multiprocess cuda
 
 
 def test(config):
@@ -266,6 +312,17 @@ def modify(config, data_loader, save):
         if (i + 1) % 100 == 0:
             print((i + 1) * config['batch_size'], time.time() - t)
             t = time.time()
+
+        for key, value in store[0]['graph']['left'].items():
+            print('-----------------')
+            print(key)
+            print(np.array(value))
+
+        for key, value in store[0]['graph']['pre'][0].items():
+            print('++++++++++++++++')
+            print(key)
+            print(np.array(value))
+        exit()
 
     f = open(os.path.join(root_path, 'preprocess', save), 'wb')
     pickle.dump(store, f, protocol=pickle.HIGHEST_PROTOCOL)
