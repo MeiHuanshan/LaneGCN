@@ -3,11 +3,13 @@
 
 
 import numpy as np
+np.set_printoptions(suppress=True)
 import torch
 from torch.utils.data import Dataset
 from scipy import sparse
 import os
 import copy
+import argoverse
 from argoverse.data_loading.argoverse_forecasting_loader import ArgoverseForecastingLoader
 from argoverse.map_representation.map_api import ArgoverseMap
 from skimage.transform import rotate
@@ -17,7 +19,7 @@ class ArgoDataset(Dataset):
     def __init__(self, split, config, train=True):
         self.config = config
         self.train = train
-        
+
         if 'preprocess' in config and config['preprocess']:
             if train:
                 self.split = np.load(self.config['preprocess_train'], allow_pickle=True)
@@ -31,8 +33,9 @@ class ArgoDataset(Dataset):
         if 'raster' in config and config['raster']:
             #TODO: DELETE
             self.map_query = MapQuery(config['map_scale'])
-            
+
     def __getitem__(self, idx):
+        print(idx)
         if 'preprocess' in self.config and self.config['preprocess']:
             data = self.split[idx]
 
@@ -69,12 +72,12 @@ class ArgoDataset(Dataset):
                     if key in data:
                         new_data[key] = ref_copy(data[key])
                 data = new_data
-           
+
             if 'raster' in self.config and self.config['raster']:
                 data.pop('graph')
                 x_min, x_max, y_min, y_max = self.config['pred_range']
                 cx, cy = data['orig']
-                
+
                 region = [cx + x_min, cx + x_max, cy + y_min, cy + y_max]
                 raster = self.map_query.query(region, data['theta'], data['city'])
 
@@ -97,7 +100,7 @@ class ArgoDataset(Dataset):
 
         data['graph'] = self.get_lane_graph(data)
         return data
-    
+
     def __len__(self):
         if 'preprocess' in self.config and self.config['preprocess']:
             return len(self.split)
@@ -109,7 +112,7 @@ class ArgoDataset(Dataset):
 
         """TIMESTAMP,TRACK_ID,OBJECT_TYPE,X,Y,CITY_NAME"""
         df = copy.deepcopy(self.avl[idx].seq_df)
-        
+
         agt_ts = np.sort(np.unique(df['TIMESTAMP'].values))
         mapping = dict()
         for i, ts in enumerate(agt_ts):
@@ -118,7 +121,7 @@ class ArgoDataset(Dataset):
         trajs = np.concatenate((
             df.X.to_numpy().reshape(-1, 1),
             df.Y.to_numpy().reshape(-1, 1)), 1)
-        
+
         steps = [mapping[x] for x in df['TIMESTAMP'].values]
         steps = np.asarray(steps, np.int64)
 
@@ -128,7 +131,7 @@ class ArgoDataset(Dataset):
 
         agt_idx = obj_type.index('AGENT')
         idcs = objs[keys[agt_idx]]
-       
+
         agt_traj = trajs[idcs]
         agt_step = steps[idcs]
 
@@ -144,7 +147,7 @@ class ArgoDataset(Dataset):
         data['trajs'] = [agt_traj] + ctx_trajs
         data['steps'] = [agt_step] + ctx_steps
         return data
-    
+
     def get_obj_feats(self, data):
         orig = data['trajs'][0][19].copy().astype(np.float32)
 
@@ -159,6 +162,7 @@ class ArgoDataset(Dataset):
             [np.sin(theta), np.cos(theta)]], np.float32)
 
         feats, ctrs, gt_preds, has_preds = [], [], [], []
+        print(len(data['trajs']))
         for traj, step in zip(data['trajs'], data['steps']):
             if 19 not in step:
                 continue
@@ -170,14 +174,14 @@ class ArgoDataset(Dataset):
             post_traj = traj[future_mask]
             gt_pred[post_step] = post_traj
             has_pred[post_step] = 1
-            
+
             obs_mask = step < 20
             step = step[obs_mask]
             traj = traj[obs_mask]
             idcs = step.argsort()
             step = step[idcs]
             traj = traj[idcs]
-            
+
             for i in range(len(step)):
                 if step[i] == 19 - (len(step) - 1) + i:
                     break
@@ -193,6 +197,7 @@ class ArgoDataset(Dataset):
                 continue
 
             ctrs.append(feat[-1, :2].copy())
+            print(ctrs)
             feat[1:, :2] -= feat[:-1, :2]
             feat[step[0], :2] = 0
             feats.append(feat)
@@ -213,14 +218,14 @@ class ArgoDataset(Dataset):
         data['has_preds'] = has_preds
         return data
 
- 
+
     def get_lane_graph(self, data):
         """Get a rectangle area defined by pred_range."""
         x_min, x_max, y_min, y_max = self.config['pred_range']
         radius = max(abs(x_min), abs(x_max)) + max(abs(y_min), abs(y_max))
         lane_ids = self.am.get_lane_ids_in_xy_bbox(data['orig'][0], data['orig'][1], data['city'], radius)
         lane_ids = copy.deepcopy(lane_ids)
-        
+
         lanes = dict()
         for lane_id in lane_ids:
             lane = self.am.city_lane_centerlines_dict[data['city']][lane_id]
@@ -236,17 +241,17 @@ class ArgoDataset(Dataset):
                 lane.centerline = centerline
                 lane.polygon = np.matmul(data['rot'], (polygon[:, :2] - data['orig'].reshape(-1, 2)).T).T
                 lanes[lane_id] = lane
-            
+
         lane_ids = list(lanes.keys())
         ctrs, feats, turn, control, intersect = [], [], [], [], []
         for lane_id in lane_ids:
             lane = lanes[lane_id]
             ctrln = lane.centerline
             num_segs = len(ctrln) - 1
-            
+
             ctrs.append(np.asarray((ctrln[:-1] + ctrln[1:]) / 2.0, np.float32))
             feats.append(np.asarray(ctrln[1:] - ctrln[:-1], np.float32))
-            
+
             x = np.zeros((num_segs, 2), np.float32)
             if lane.turn_direction == 'LEFT':
                 x[:, 0] = 1
@@ -258,21 +263,21 @@ class ArgoDataset(Dataset):
 
             control.append(lane.has_traffic_control * np.ones(num_segs, np.float32))
             intersect.append(lane.is_intersection * np.ones(num_segs, np.float32))
-            
+
         node_idcs = []
         count = 0
         for i, ctr in enumerate(ctrs):
             node_idcs.append(range(count, count + len(ctr)))
             count += len(ctr)
         num_nodes = count
-        
+
         pre, suc = dict(), dict()
         for key in ['u', 'v']:
             pre[key], suc[key] = [], []
         for i, lane_id in enumerate(lane_ids):
             lane = lanes[lane_id]
             idcs = node_idcs[i]
-            
+
             pre['u'] += idcs[1:]
             pre['v'] += idcs[:-1]
             if lane.predecessors is not None:
@@ -281,7 +286,7 @@ class ArgoDataset(Dataset):
                         j = lane_ids.index(nbr_id)
                         pre['u'].append(idcs[0])
                         pre['v'].append(node_idcs[j][-1])
-                    
+
             suc['u'] += idcs[:-1]
             suc['v'] += idcs[1:]
             if lane.successors is not None:
@@ -329,7 +334,7 @@ class ArgoDataset(Dataset):
         suc_pairs = np.asarray(suc_pairs, np.int64)
         left_pairs = np.asarray(left_pairs, np.int64)
         right_pairs = np.asarray(right_pairs, np.int64)
-                    
+
         graph = dict()
         graph['ctrs'] = np.concatenate(ctrs, 0)
         graph['num_nodes'] = num_nodes
@@ -344,11 +349,11 @@ class ArgoDataset(Dataset):
         graph['suc_pairs'] = suc_pairs
         graph['left_pairs'] = left_pairs
         graph['right_pairs'] = right_pairs
-        
+
         for k1 in ['pre', 'suc']:
             for k2 in ['u', 'v']:
                 graph[k1][0][k2] = np.asarray(graph[k1][0][k2], np.int64)
-        
+
         for key in ['pre', 'suc']:
             if 'scales' in self.config and self.config['scales']:
                 #TODO: delete here
@@ -376,7 +381,7 @@ class ArgoTestDataset(ArgoDataset):
         else:
             self.avl = ArgoverseForecastingLoader(split)
             self.am = ArgoverseMap()
-            
+
 
     def __getitem__(self, idx):
         if 'preprocess' in self.config and self.config['preprocess']:
@@ -423,7 +428,7 @@ class ArgoTestDataset(ArgoDataset):
         data['graph'] = self.get_lane_graph(data)
         data['idx'] = idx
         return data
-    
+
     def __len__(self):
         if 'preprocess' in self.config and self.config['preprocess']:
             return len(self.split)
@@ -435,7 +440,7 @@ class MapQuery(object):
     """[Deprecated] Query rasterized map for a given region"""
     def __init__(self, scale, autoclip=True):
         """
-        scale: one meter -> num of `scale` voxels 
+        scale: one meter -> num of `scale` voxels
         """
         super(MapQuery, self).__init__()
         assert scale in (1,2,4,8)
@@ -483,10 +488,10 @@ class MapQuery(object):
         xstart,ystart=0,0
         if self.autoclip:
             if x0<0:
-                xstart = -x0 
+                xstart = -x0
                 x0 = 0
             if y0<0:
-                ystart = -y0 
+                ystart = -y0
                 y0 = 0
             x1 = min(x1,shape[1]*self.scale-1)
             y1 = min(y1,shape[0]*self.scale-1)
@@ -513,7 +518,7 @@ def ref_copy(data):
         return d
     return data
 
-    
+
 def dilated_nbrs(nbr, num_nodes, num_scales):
     data = np.ones(len(nbr['u']), np.bool)
     csr = sparse.csr_matrix((data, (nbr['u'], nbr['v'])), shape=(num_nodes, num_nodes))
@@ -548,7 +553,7 @@ def dilated_nbrs2(nbr, num_nodes, scales):
             nbrs.append(nbr)
     return nbrs
 
- 
+
 def collate_fn(batch):
     batch = from_numpy(batch)
     return_batch = dict()

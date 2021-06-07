@@ -47,8 +47,8 @@ if "save_dir" not in config:
 if not os.path.isabs(config["save_dir"]):
     config["save_dir"] = os.path.join(root_path, "results", config["save_dir"])
 
-config["batch_size"] = 32
-config["val_batch_size"] = 32
+config["batch_size"] = 1
+config["val_batch_size"] = 1
 config["workers"] = 0
 config["val_workers"] = config["workers"]
 
@@ -901,13 +901,13 @@ def pred_metrics(preds, gt_preds, has_preds):
 
 def get_model():
     net = Net(config)
-    net = net.cuda()
+    # net = net.cuda()
 
-    loss = Loss(config).cuda()
-    post_process = PostProcess(config).cuda()
+    # loss = Loss(config).cuda()
+    # post_process = PostProcess(config).cuda()
 
-    params = net.parameters()
-    opt = Optimizer(params, config)
+    # params = net.parameters()
+    # opt = Optimizer(params, config)
 
 
-    return config, ArgoDataset, collate_fn, net, loss, post_process, opt
+    return config, ArgoDataset #, collate_fn, net, loss, post_process, opt

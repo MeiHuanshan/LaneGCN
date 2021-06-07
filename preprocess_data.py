@@ -18,6 +18,7 @@ import multiprocessing as mp
 
 from tqdm import tqdm
 import numpy as np
+np.set_printoptions(suppress=True)
 import torch
 from torch.utils.data import DataLoader
 from data import ArgoDataset as Dataset, from_numpy, ref_copy, collate_fn
@@ -46,8 +47,8 @@ def main():
     config, *_ = model.get_model()
 
     config["preprocess"] = False  # we use raw data to generate preprocess data
-    config["val_workers"] = 32
-    config["workers"] = 32
+    config["val_workers"] = 1
+    config["workers"] = 1
     config['cross_dist'] = 6
     config['cross_angle'] = 0.5 * np.pi
 
@@ -55,7 +56,11 @@ def main():
 
 
 
+<<<<<<< HEAD
     # val(config)
+=======
+    val(config)
+>>>>>>> multiprocess cuda
     # test(config)
     # train(config)
 
@@ -130,41 +135,43 @@ def val(config):
 
     t = time.time()
     for i, data in enumerate(tqdm(val_loader)):
-        data = dict(data)
-        for j in range(len(data["idx"])):
-            store = dict()
-            for key in [
-                "idx",
-                "city",
-                "feats",
-                "ctrs",
-                "orig",
-                "theta",
-                "rot",
-                "gt_preds",
-                "has_preds",
-                "graph",
-            ]:
-                store[key] = to_numpy(data[key][j])
-                if key in ["graph"]:
-                    store[key] = to_int16(store[key])
-            stores[store["idx"]] = store
+        print(data.keys())
+        exit()
+    #     data = dict(data)
+    #     for j in range(len(data["idx"])):
+    #         store = dict()
+    #         for key in [
+    #             "idx",
+    #             "city",
+    #             "feats",
+    #             "ctrs",
+    #             "orig",
+    #             "theta",
+    #             "rot",
+    #             "gt_preds",
+    #             "has_preds",
+    #             "graph",
+    #         ]:
+    #             store[key] = to_numpy(data[key][j])
+    #             if key in ["graph"]:
+    #                 store[key] = to_int16(store[key])
+    #         stores[store["idx"]] = store
 
-        if (i + 1) % 100 == 0:
-            print(i, time.time() - t)
-            t = time.time()
+    #     if (i + 1) % 100 == 0:
+    #         print(i, time.time() - t)
+    #         t = time.time()
 
-    dataset = PreprocessDataset(stores, config, train=False)
-    data_loader = DataLoader(
-        dataset,
-        batch_size=config['batch_size'],
-        num_workers=config['workers'],
-        shuffle=False,
-        collate_fn=from_numpy,
-        pin_memory=True,
-        drop_last=False)
+    # dataset = PreprocessDataset(stores, config, train=False)
+    # data_loader = DataLoader(
+    #     dataset,
+    #     batch_size=config['batch_size'],
+    #     num_workers=config['workers'],
+    #     shuffle=False,
+    #     collate_fn=from_numpy,
+    #     pin_memory=True,
+    #     drop_last=False)
 
-    modify(config, data_loader,config["preprocess_val"])
+    # modify(config, data_loader,config["preprocess_val"])
 
 
 def test(config):
